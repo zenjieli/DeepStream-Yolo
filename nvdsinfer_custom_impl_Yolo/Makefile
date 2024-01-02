@@ -23,6 +23,9 @@
 # https://www.github.com/marcoslucianops
 ################################################################################
 
+# Default build type is release
+BUILD_TYPE ?= RELEASE
+
 CUDA_VER?=
 ifeq ($(CUDA_VER),)
 	$(error "CUDA_VER is not set")
@@ -41,7 +44,11 @@ endif
 CC:= g++
 NVCC:=/usr/local/cuda-$(CUDA_VER)/bin/nvcc
 
-CFLAGS:= -Wall -std=c++11 -shared -fPIC -Wno-error=deprecated-declarations
+CFLAGS_COMMON := -Wall -std=c++11 -shared -fPIC -Wno-error=deprecated-declarations
+CFLAGS_RELEASE := -O3
+CFLAGS_DEBUG := -g -O0
+
+CFLAGS := $(CFLAGS_COMMON) $(CFLAGS_$(BUILD_TYPE))
 CFLAGS+= -I/opt/nvidia/deepstream/deepstream/sources/includes -I/usr/local/cuda-$(CUDA_VER)/include
 
 ifeq ($(OPENCV), 1)

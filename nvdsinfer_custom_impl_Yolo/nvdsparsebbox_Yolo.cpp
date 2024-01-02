@@ -31,6 +31,22 @@ extern "C" bool
 NvDsInferParseYolo(std::vector<NvDsInferLayerInfo> const& outputLayersInfo, NvDsInferNetworkInfo const& networkInfo,
     NvDsInferParseDetectionParams const& detectionParams, std::vector<NvDsInferParseObjectInfo>& objectList);
 
+/*
+ * Similar to NvDsInferParseYolo, but double the output bounding box sizes.
+ * Since the parsed BB must be within the video frame, this function works only on videos with a 16x9 aspect ratio.
+*/
+extern "C" bool
+NvDsInferParseYoloDoubleSize16x9(std::vector<NvDsInferLayerInfo> const& outputLayersInfo, NvDsInferNetworkInfo const& networkInfo,
+    NvDsInferParseDetectionParams const& detectionParams, std::vector<NvDsInferParseObjectInfo>& objectList);
+
+/*
+ * Similar to NvDsInferParseYolo, but double the output bounding box sizes.
+ * Since the parsed BB must be within the video frame, this function works only on videos with a 4x3 aspect ratio.
+*/
+extern "C" bool
+NvDsInferParseYoloDoubleSize4x3(std::vector<NvDsInferLayerInfo> const& outputLayersInfo, NvDsInferNetworkInfo const& networkInfo,
+    NvDsInferParseDetectionParams const& detectionParams, std::vector<NvDsInferParseObjectInfo>& objectList);
+
 extern "C" bool
 NvDsInferParseYoloE(std::vector<NvDsInferLayerInfo> const& outputLayersInfo, NvDsInferNetworkInfo const& networkInfo,
     NvDsInferParseDetectionParams const& detectionParams, std::vector<NvDsInferParseObjectInfo>& objectList);
@@ -92,12 +108,42 @@ decodeTensorYolo(const float* boxes, const float* scores, const float* classes, 
     float bw = boxes[b * 4 + 2];
     float bh = boxes[b * 4 + 3];
 
-    float bx1 = bxc - bw / 2;
-    float by1 = byc - bh / 2;
+    float bx1 = bxc - bw;
+    float by1 = byc - bh;
     float bx2 = bx1 + bw;
     float by2 = by1 + bh;
 
     addBBoxProposal(bx1, by1, bx2, by2, netW, netH, maxIndex, maxProb, binfo);
+  }
+
+  return binfo;
+}
+
+static std::vector<NvDsInferParseObjectInfo>
+decodeTensorYoloDoubleSize(const float* boxes, const float* scores, const float* classes, const uint& outputSize, const uint& netW,
+    const uint& netH, const std::vector<float>& preclusterThreshold, int orig_rel_width, int orig_rel_height)
+{
+  std::vector<NvDsInferParseObjectInfo> binfo;
+
+  for (uint b = 0; b < outputSize; ++b) {
+    float maxProb = scores[b];
+    int maxIndex = (int) classes[b];
+
+    if (maxProb < preclusterThreshold[maxIndex]) {
+      continue;
+    }
+
+    float bxc = boxes[b * 4 + 0];
+    float byc = boxes[b * 4 + 1];
+    float bw = boxes[b * 4 + 2];
+    float bh = boxes[b * 4 + 3];
+
+    float bx1 = bxc - bw;
+    float by1 = byc - bh;
+    float bx2 = bxc + bw;
+    float by2 = byc + bh;
+
+    addBBoxProposal(bx1, by1, bx2, by2, netW, netH * orig_rel_height / orig_rel_width, maxIndex, maxProb, binfo);
   }
 
   return binfo;
@@ -157,6 +203,35 @@ NvDsInferParseCustomYolo(std::vector<NvDsInferLayerInfo> const& outputLayersInfo
 }
 
 static bool
+NvDsInferParseCustomYoloDoubleSize(std::vector<NvDsInferLayerInfo> const& outputLayersInfo, NvDsInferNetworkInfo const& networkInfo,
+    NvDsInferParseDetectionParams const& detectionParams, int orig_rel_width, int orig_rel_height,
+    std::vector<NvDsInferParseObjectInfo>& objectList)
+{
+  if (outputLayersInfo.empty()) {
+    std::cerr << "ERROR: Could not find output layer in bbox parsing" << std::endl;
+    return false;
+  }
+
+  std::vector<NvDsInferParseObjectInfo> objects;
+
+  const NvDsInferLayerInfo& boxes = outputLayersInfo[0];
+  const NvDsInferLayerInfo& scores = outputLayersInfo[1];
+  const NvDsInferLayerInfo& classes = outputLayersInfo[2];
+
+  const uint outputSize = boxes.inferDims.d[0];
+
+  std::vector<NvDsInferParseObjectInfo> outObjs = decodeTensorYoloDoubleSize((const float*) (boxes.buffer),
+      (const float*) (scores.buffer), (const float*) (classes.buffer), outputSize, networkInfo.width, networkInfo.height,
+      detectionParams.perClassPreclusterThreshold, orig_rel_width, orig_rel_height);
+
+  objects.insert(objects.end(), outObjs.begin(), outObjs.end());
+
+  objectList = objects;
+
+  return true;
+}
+
+static bool
 NvDsInferParseCustomYoloE(std::vector<NvDsInferLayerInfo> const& outputLayersInfo, NvDsInferNetworkInfo const& networkInfo,
     NvDsInferParseDetectionParams const& detectionParams, std::vector<NvDsInferParseObjectInfo>& objectList)
 {
@@ -189,6 +264,20 @@ NvDsInferParseYolo(std::vector<NvDsInferLayerInfo> const& outputLayersInfo, NvDs
     NvDsInferParseDetectionParams const& detectionParams, std::vector<NvDsInferParseObjectInfo>& objectList)
 {
   return NvDsInferParseCustomYolo(outputLayersInfo, networkInfo, detectionParams, objectList);
+}
+
+extern "C" bool
+NvDsInferParseYoloDoubleSize16x9(std::vector<NvDsInferLayerInfo> const& outputLayersInfo, NvDsInferNetworkInfo const& networkInfo,
+    NvDsInferParseDetectionParams const& detectionParams, std::vector<NvDsInferParseObjectInfo>& objectList)
+{
+  return NvDsInferParseCustomYoloDoubleSize(outputLayersInfo, networkInfo, detectionParams, 16, 9, objectList);
+}
+
+extern "C" bool
+NvDsInferParseYoloDoubleSize4x3(std::vector<NvDsInferLayerInfo> const& outputLayersInfo, NvDsInferNetworkInfo const& networkInfo,
+    NvDsInferParseDetectionParams const& detectionParams, std::vector<NvDsInferParseObjectInfo>& objectList)
+{
+  return NvDsInferParseCustomYoloDoubleSize(outputLayersInfo, networkInfo, detectionParams, 4, 3, objectList);
 }
 
 extern "C" bool

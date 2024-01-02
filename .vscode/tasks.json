@@ -1,0 +1,51 @@
+{
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "nvdsinfer_custom_impl_Yolo Release",
+            "command": "make",
+            "args": [
+                "-C",
+                "nvdsinfer_custom_impl_Yolo",
+                "BUILD_TYPE=RELEASE"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "CUDA_VER": "12.2"
+                }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "type": "shell",
+            "label": "nvdsinfer_custom_impl_Yolo Debug",
+            "command": "make",
+            "args": [
+                "-C",
+                "nvdsinfer_custom_impl_Yolo",
+                "BUILD_TYPE=DEBUG"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "CUDA_VER": "12.2"
+                }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ],
+    "version": "2.0.0"
+}
